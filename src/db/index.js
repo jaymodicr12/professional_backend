@@ -6,7 +6,7 @@ const connectDB = async () => {
     const connectionInstance = await mongoose.connect(
       `${process.env.MONGODB_URL}/${DB_NAME}`
     );
-    console.log(connectionInstance);
+    // console.log(connectionInstance);
     console.log(
       `MongoDB connected !! DB HOST: ${connectionInstance.connection.host}`
     );
