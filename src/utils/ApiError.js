@@ -1,6 +1,6 @@
-const { Error } = require("mongoose");
+import { Error } from "mongoose";
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     statusCode,
     message = "Something Went Wrong",
