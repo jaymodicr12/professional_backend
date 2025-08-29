@@ -4,6 +4,31 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+//generating method for access and refresh token
+const generateAccessAndRefreshTokens = async (userId) => {
+  try {
+    // find by user id given in params
+    await User.findById(userId);
+
+    // get ref from upper function
+    const accessToken = User.generateRefreshToken();
+    const refreshToken = User.generateAccessToken();
+
+    // get refreshtoken from User object and save, also used validation beforesave to false
+    User.refreshToken = refreshToken;
+    await User.save({ validateBeforeSave: false });
+
+    // return both
+    return { accessToken, refreshToken };
+  } catch (error) {
+    // throw custom error
+    throw new ApiError(
+      500,
+      "something went wrong generating refresh and access token"
+    );
+  }
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   // get user details from frontend/ payloads
   // validation
@@ -80,4 +105,100 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User Registered Successfully"));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  // check if user have access token
+
+  // get data from req body
+  // username or email
+  // find the user
+  // check if user exist
+  // check username and password
+  // access and refreshtoken
+  // send cookies
+
+  // getting items ffrom req.body
+  const { email, username, password } = req.body;
+
+  //check if username  and email are available if not available throw custom error made for errors
+  if (!username || !email) {
+    throw new ApiError(400, "Username Or Email is required!");
+  }
+
+  // using $or method to find both at one time
+  const user = await User.findOne({
+    $or: [{ username }, { email }],
+  });
+
+  // if user not available throw custom error
+  if (!user) {
+    throw new ApiError(404, "User Does not exists");
+  }
+
+  // check if password is valid through the validation method
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  // check if validated password correct
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid user credentials");
+  }
+
+  // used generate acc and ref token method passed a user id and extracted both from the returning value
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+    user._id
+  );
+
+  // find user and remove password and refreshtoken field and then name it loggedin user
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  // sending an option method to front end so somebody cannot modify the cookies
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  // return response including status, cookie for accesstoken, cookie for refreshtoken and json
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshtoken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User Logged in Successfully"
+      )
+    );
+});
+
+const logoutUser = asyncHandler(async (req, res) => {
+  User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        refreshToken: undefined,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "user logged out successfully"));
+});
+
+export { registerUser, loginUser, logoutUser };
